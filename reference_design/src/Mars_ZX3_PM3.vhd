@@ -1,5 +1,5 @@
 ---------------------------------------------------------------------------------------------------
--- Copyright (c) 2021 by Enclustra GmbH, Switzerland.
+-- Copyright (c) 2022 by Enclustra GmbH, Switzerland.
 --
 -- Permission is hereby granted, free of charge, to any person obtaining a copy of
 -- this hardware, software, firmware, and associated documentation files (the
@@ -58,7 +58,7 @@ entity Mars_ZX3_PM3 is
     -- DDR3
     DDR3_VSEL                      : inout   std_logic;
     
-    -- FMC0
+    -- FMC LPC Connector 0
     FMC_LA02_N                     : inout   std_logic;
     FMC_LA02_P                     : inout   std_logic;
     FMC_LA03_N                     : inout   std_logic;
@@ -133,20 +133,25 @@ entity Mars_ZX3_PM3 is
     FMC_CLK1_M2C_P                 : inout   std_logic;
     
     -- FX3
-    FX3_A1                         : inout   std_logic;
-    FX3_CLK                        : inout   std_logic;
-    FX3_DQ8                        : inout   std_logic;
-    FX3_DQ9                        : inout   std_logic;
-    FX3_DQ10                       : inout   std_logic;
-    FX3_DQ11                       : inout   std_logic;
-    FX3_DQ12                       : inout   std_logic;
-    FX3_DQ13                       : inout   std_logic;
-    FX3_DQ14                       : inout   std_logic;
-    FX3_DQ15                       : inout   std_logic;
-    FX3_FLAGA                      : inout   std_logic;
-    FX3_FLAGB_BTN_N                : inout   std_logic;
+    FX3_CLK                        : out     std_logic;
+    FX3_FLAGA                      : in      std_logic;
+    FX3_FLAGB_BTN_N                : in      std_logic;
+    FX3_A                          : out     std_logic_vector(1 downto 1);
+    FX3_DQ                         : inout   std_logic_vector(15 downto 8);
     
-    -- I2C_PL
+    -- Mini HDMI / PCI Express / LVDS Connector
+    PCIE_PET1_P                    : in      std_logic;
+    PCIE_PER0_N                    : out     std_logic;
+    PCIE_PER0_P                    : out     std_logic;
+    PCIE_PET0_N                    : out     std_logic;
+    PCIE_PET0_P                    : out     std_logic;
+    PCIE_PER1_N                    : out     std_logic;
+    PCIE_PER1_P                    : out     std_logic;
+    PCIE_PET1_N                    : inout   std_logic;
+    PCIE_REFCLK_N                  : out     std_logic;
+    PCIE_REFCLK_P                  : out     std_logic;
+    
+    -- I2C PL
     I2C_INT_N                      : in      std_logic;
     Rev4                           : in      std_logic;
     Rev5                           : in      std_logic;
@@ -159,7 +164,7 @@ entity Mars_ZX3_PM3 is
     LED2_N                         : out     std_logic;
     LED3_N                         : out     std_logic;
     
-    -- PL_Gig_Ethernet
+    -- PL Gig Ethernet
     ETH_LED2_N                     : inout   std_logic;
     ETH_MDC                        : out     std_logic;
     ETH_RXCLK                      : in      std_logic;
@@ -170,6 +175,10 @@ entity Mars_ZX3_PM3 is
     ETH_TXCTL                      : out     std_logic;
     ETH_RXD                        : in      std_logic_vector(3 downto 0);
     ETH_TXD                        : out     std_logic_vector(3 downto 0);
+    
+    -- UART
+    UART_RXD                       : in      std_logic;
+    UART_TXD                       : out     std_logic;
     
     -- USB
     USB_RST_N                      : inout   std_logic
@@ -185,7 +194,6 @@ architecture rtl of Mars_ZX3_PM3 is
     port (
       Clk50               : out    std_logic;
       Rst_N               : out    std_logic;
-      I2C_INT             : in     std_logic;
       FIXED_IO_mio        : inout  std_logic_vector(53 downto 0);
       FIXED_IO_ddr_vrn    : inout  std_logic;
       FIXED_IO_ddr_vrp    : inout  std_logic;
@@ -207,30 +215,39 @@ architecture rtl of Mars_ZX3_PM3 is
       DDR_dq              : inout  std_logic_vector(31 downto 0);
       DDR_dqs_n           : inout  std_logic_vector(3 downto 0);
       DDR_dqs_p           : inout  std_logic_vector(3 downto 0);
-      IIC_0_sda_i         : in     std_logic;
-      IIC_0_sda_o         : out    std_logic;
-      IIC_0_sda_t         : out    std_logic;
-      IIC_0_scl_i         : in     std_logic;
-      IIC_0_scl_o         : out    std_logic;
-      IIC_0_scl_t         : out    std_logic;
-      LED_N               : out    std_logic_vector(3 downto 0)
+      IIC_sda_i           : in     std_logic;
+      IIC_sda_o           : out    std_logic;
+      IIC_sda_t           : out    std_logic;
+      IIC_scl_i           : in     std_logic;
+      IIC_scl_o           : out    std_logic;
+      IIC_scl_t           : out    std_logic;
+      LED_N               : out    std_logic_vector(3 downto 0);
+      I2C_INT             : in     std_logic
     );
     
   end component Mars_ZX3;
+  
+  component OBUFDS is
+    port (
+      I : in STD_LOGIC;
+      O : out STD_LOGIC;
+      OB : out STD_LOGIC
+    );
+  end component OBUFDS;
 
   ---------------------------------------------------------------------------------------------------
   -- signal declarations
   ---------------------------------------------------------------------------------------------------
   signal Clk50            : std_logic;
   signal Rst_N            : std_logic;
-  signal I2C_INT          : std_logic;
-  signal IIC_0_sda_i      : std_logic;
-  signal IIC_0_sda_o      : std_logic;
-  signal IIC_0_sda_t      : std_logic;
-  signal IIC_0_scl_i      : std_logic;
-  signal IIC_0_scl_o      : std_logic;
-  signal IIC_0_scl_t      : std_logic;
+  signal IIC_sda_i        : std_logic;
+  signal IIC_sda_o        : std_logic;
+  signal IIC_sda_t        : std_logic;
+  signal IIC_scl_i        : std_logic;
+  signal IIC_scl_o        : std_logic;
+  signal IIC_scl_t        : std_logic;
   signal LED_N            : std_logic_vector(3 downto 0);
+  signal I2C_INT          : std_logic;
   signal LedCount         : unsigned(23 downto 0);
 
 begin
@@ -242,7 +259,6 @@ begin
     port map (
       Clk50                => Clk50,
       Rst_N                => Rst_N,
-      I2C_INT              => I2C_INT,
       FIXED_IO_mio         => FIXED_IO_mio,
       FIXED_IO_ddr_vrn     => FIXED_IO_ddr_vrn,
       FIXED_IO_ddr_vrp     => FIXED_IO_ddr_vrp,
@@ -264,21 +280,52 @@ begin
       DDR_dq               => DDR_dq,
       DDR_dqs_n            => DDR_dqs_n,
       DDR_dqs_p            => DDR_dqs_p,
-      IIC_0_sda_i          => IIC_0_sda_i,
-      IIC_0_sda_o          => IIC_0_sda_o,
-      IIC_0_sda_t          => IIC_0_sda_t,
-      IIC_0_scl_i          => IIC_0_scl_i,
-      IIC_0_scl_o          => IIC_0_scl_o,
-      IIC_0_scl_t          => IIC_0_scl_t,
-      LED_N                => LED_N
+      IIC_sda_i            => IIC_sda_i,
+      IIC_sda_o            => IIC_sda_o,
+      IIC_sda_t            => IIC_sda_t,
+      IIC_scl_i            => IIC_scl_i,
+      IIC_scl_o            => IIC_scl_o,
+      IIC_scl_t            => IIC_scl_t,
+      LED_N                => LED_N,
+      I2C_INT              => I2C_INT
     );
   
-  DDR3_VSEL <= '0';
-  I2C_SDA  <= IIC_0_sda_o when IIC_0_sda_t = '0' else 'Z';
-  IIC_0_sda_i <= I2C_SDA;
-  I2C_SCL <= IIC_0_scl_o when IIC_0_scl_t = '0' else 'Z';
-  IIC_0_scl_i <= I2C_SCL;
+  DDR3_VSEL <= 'Z';
+  
+  lvds_clock_buf: component OBUFDS
+    port map (
+      I => '0',
+      O => PCIE_REFCLK_P,
+      OB => PCIE_REFCLK_N
+    );
+  
+  lvds_per0_buf: component OBUFDS
+    port map (
+      I => '0',
+      O => PCIE_PER0_P,
+      OB => PCIE_PER0_N
+    );
+  
+  lvds_pet0_buf: component OBUFDS
+    port map (
+      I => '0',
+      O => PCIE_PET0_P,
+      OB => PCIE_PET0_N
+    );
+  
+  lvds_per1_buf: component OBUFDS
+    port map (
+      I => '0',
+      O => PCIE_PER1_P,
+      OB => PCIE_PER1_N
+    );
+  
+  I2C_SDA  <= IIC_sda_o when IIC_sda_t = '0' else 'Z';
+  IIC_sda_i <= I2C_SDA;
+  I2C_SCL <= IIC_scl_o when IIC_scl_t = '0' else 'Z';
+  IIC_scl_i <= I2C_SCL;
   I2C_INT <= not I2C_INT_N when Rev5 = '0' else I2C_INT_N;
+  
   process (Clk50)
   begin
     if rising_edge (Clk50) then
@@ -293,5 +340,5 @@ begin
   LED1_N <= '0' when LED_N(0) = '0' else 'Z';
   LED2_N <= '0' when LED_N(1) = '0' else 'Z';
   LED3_N <= '0' when LED_N(2) = '0' else 'Z';
-
+  
 end rtl;
